@@ -22,7 +22,7 @@ class DatabaseManager {
     // Courses
     private let courseID = Expression<Int64>("id")
     private let courseName = Expression<String>("name")
-    private let estimatedHours = Expression<Int>("estimated_hours")
+    // private let estimatedHours = Expression<Int>("estimated_hours")
 
     // Assignments
     private let assignmentID = Expression<Int64>("id")
@@ -62,7 +62,7 @@ class DatabaseManager {
             try db?.run(courses.create(ifNotExists: true) { table in
                 table.column(courseID, primaryKey: .autoincrement)
                 table.column(courseName)
-                table.column(estimatedHours)
+                // table.column(estimatedHours)
             })
 
             try db?.run(assignments.create(ifNotExists: true) { table in
@@ -96,12 +96,9 @@ class DatabaseManager {
 
     // MARK: - CRUD Operations
 
-    func addCourse(name: String, estimatedHours: Int) {
+    func addCourse(name: String) {
         do {
-            let insert = courses.insert(
-                courseName <- name,
-                self.estimatedHours <- estimatedHours
-            )
+            let insert = courses.insert(courseName <- name)
             try db?.run(insert)
         } catch {
             print("Error adding course: \(error)")
@@ -162,6 +159,76 @@ class DatabaseManager {
             print("Error updating assignment status: \(error)")
         }
     }
+    
+    func getAllCourseNames() -> [String] {
+        var names: [String] = []
+        do {
+            for course in try db!.prepare(courses) {
+                names.append(course[courseName])
+            }
+        } catch {
+            print("Error fetching course names: \(error)")
+        }
+        return names
+    }
+    
+    func getAssignmentsForCourse(named inputCourseName: String) -> [Assignment] {
+        var results: [Assignment] = []
+        do {
+            // First find course ID
+            let courseQuery = courses.filter(courseName == inputCourseName)
+            guard let courseRow = try db?.pluck(courseQuery) else { return [] }
+            let courseIDValue = courseRow[courseID]
+
+            let assignmentQuery = assignments.filter(courseIDFK == courseIDValue)
+            for row in try db!.prepare(assignmentQuery) {
+                let logged = getLoggedHours(for: row[assignmentID])
+                let assignment = Assignment(
+                    id: row[assignmentID],
+                    title: row[assignmentTitle],
+                    dueDate: row[dueDate],
+                    estimatedHours: row[assignmentEstimatedHours],
+                    loggedHours: logged
+                )
+                results.append(assignment)
+            }
+        } catch {
+            print("Error loading assignments: \(error)")
+        }
+        return results
+    }
+    
+    func addAssignment(title: String, inputCourseName: String, dueDate: Date, estimatedHours: Int, colorCode: String) {
+        do {
+            let courseQuery = courses.filter(courseName == inputCourseName)
+            guard let courseRow = try db?.pluck(courseQuery) else { return }
+            let courseIDValue = courseRow[courseID]
+
+            let insert = assignments.insert(
+                assignmentTitle <- title,
+                courseIDFK <- courseIDValue,
+                self.dueDate <- dueDate,
+                assignmentEstimatedHours <- estimatedHours,
+                status <- "Incomplete",
+                self.colorCode <- colorCode
+            )
+            try db?.run(insert)
+        } catch {
+            print("Error adding assignment: \(error)")
+        }
+    }
+
+    func getLoggedHours(for assignmentID: Int64) -> Double {
+        var total: Double = 0
+        do {
+            let logs = timeLogs.filter(assignmentIDFK == assignmentID)
+            for log in try db!.prepare(logs) {
+                total += log[hoursLogged]
+            }
+        } catch {
+            print("Error calculating logged hours: \(error)")
+        }
+        return total
+    }
+
 }
-
-

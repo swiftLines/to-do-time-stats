@@ -8,43 +8,54 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var courseName: String = ""
-    @State private var estimatedHours: String = ""
+    @State private var courses: [String] = []
+    @State private var showingAddCourse = false
+    @State private var newCourseName = ""
 
     var body: some View {
-        VStack {
-            Text("Assignment Tracker")
-                .font(.largeTitle)
-                .padding()
-
-            TextField("Course Name", text: $courseName)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding()
-
-            TextField("Estimated Hours", text: $estimatedHours)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                // .keyboardType(.numberPad) iOS only
-                .padding()
-
-            Button(action: {
-                if let hours = Int(estimatedHours) {
-                    DatabaseManager.shared.addCourse(name: courseName, estimatedHours: hours)
+        NavigationView {
+            VStack {
+                List {
+                    ForEach(courses, id: \.self) { course in
+                        NavigationLink(destination: AssignmentListView(courseName: course)) {
+                            Text(course)
+                        }
+                    }
                 }
-            }) {
-                Text("Add Course")
+
+                Button("Add Course") {
+                    showingAddCourse = true
+                }
+                .padding()
+            }
+            .navigationTitle("Courses")
+        }
+        .onAppear(perform: loadCourses)
+        .sheet(isPresented: $showingAddCourse) {
+            VStack(spacing: 20) {
+                Text("Add New Course")
+                    .font(.headline)
+                TextField("Course Name", text: $newCourseName)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
+
+                Button("Add") {
+                    if !newCourseName.isEmpty {
+                        DatabaseManager.shared.addCourse(name: newCourseName)
+                        newCourseName = ""
+                        showingAddCourse = false
+                        loadCourses()
+                    }
+                }
+                .padding()
+                Spacer()
             }
             .padding()
+            .frame(width: 300, height: 200)
         }
-        .padding()
     }
-}
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+    func loadCourses() {
+        courses = DatabaseManager.shared.getAllCourseNames()
     }
 }
